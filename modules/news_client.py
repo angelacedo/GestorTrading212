@@ -2,6 +2,7 @@ import os
 import requests
 import logging
 from datetime import datetime, timedelta
+import time
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
@@ -30,6 +31,7 @@ class NewsClient:
             raise ValueError("Credenciales de Newsdata incompletas.")
             
         self.base_url = "https://newsdata.io/api/1/news"
+        self._sector_cache = {}
 
     def _clean_ticker(self, ticker: str) -> str:
         """
@@ -115,6 +117,7 @@ class NewsClient:
         }
         
         try:
+            time.sleep(1.2) # Rate limit prevencion
             response = requests.get(self.base_url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -145,6 +148,7 @@ class NewsClient:
         }
         
         try:
+            time.sleep(1.2) # Rate limit prevencion
             response = requests.get(self.base_url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -213,6 +217,10 @@ class NewsClient:
         """
         Busca noticias de contexto agregadas por sector, especialmente útil para activos sin ticker particular como Materias Primas.
         """
+        if sector in self._sector_cache:
+            logger.info(f"Usando caché local para el sector: {sector}")
+            return self._sector_cache[sector]
+
         logger.info(f"Buscando contexto macro para el sector: {sector}...")
         params = {
             "apikey": self.api_key,
@@ -222,6 +230,7 @@ class NewsClient:
         }
         
         try:
+            time.sleep(1.2) # Rate limit prevencion
             response = requests.get(self.base_url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -231,7 +240,9 @@ class NewsClient:
                 return []
 
             results = data.get("results", [])
-            return self._procesar_y_filtrar_noticias(results, max_articles)
+            noticias_procesadas = self._procesar_y_filtrar_noticias(results, max_articles)
+            self._sector_cache[sector] = noticias_procesadas
+            return noticias_procesadas
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Falla de red buscando el sector {sector}: {str(e)}")

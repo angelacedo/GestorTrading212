@@ -24,7 +24,7 @@ class SymbolResolver:
         # 1c. Configuración del modelo gratuito vía OpenRouter
         self.api_key = os.getenv("OPENROUTER_API_KEY")
         # Mantiene el fallback local explícito de la instrucción anterior por si en .env falla o cambia
-        self.model = os.getenv("OPENROUTER_MODEL_MAP_SYMBOL", "meta-llama/llama-3.2-3b-instruct:free")
+        self.model = os.getenv("OPENROUTER_MODEL_MAP_SYMBOL")
 
         if not self.api_key:
             logger.error("OPENROUTER_API_KEY no encontrada.")
@@ -67,13 +67,13 @@ class SymbolResolver:
         """
         resultados = {}
         símbolos_a_consultar = []
-        
+
         # 1. Filtrar de la lista de entrada los que ya estén en caché
         with self.cache_lock:
             for sym in t212_symbols:
                 if not sym or sym in ["Desconocido", "Cash"]:
                     continue
-                    
+
                 if sym in self.cache:
                     resultados[sym] = self.cache[sym]
                 else:
@@ -83,7 +83,7 @@ class SymbolResolver:
         # 2. Si todos los símbolos ya están en caché, abortar petición LLM
         if not símbolos_a_consultar:
             return resultados
-            
+
         logger.info(f"Consultando traducción LLM en bloque para {len(símbolos_a_consultar)} símbolos nuevos...")
 
         # 3. Construir mensaje único de usuario sin system prompt
@@ -111,7 +111,7 @@ class SymbolResolver:
             # Extracción del cuerpo textual
             respuesta_cruda = response.choices[0].message.content or ""
             respuesta_limpia = respuesta_cruda.strip()
-            
+
             # Defensiva ligera en caso de que el LLM devuelva formato markdown de bloque
             if respuesta_limpia.startswith("```json"):
                 respuesta_limpia = respuesta_limpia[7:]
@@ -119,9 +119,9 @@ class SymbolResolver:
                 respuesta_limpia = respuesta_limpia[3:]
             if respuesta_limpia.endswith("```"):
                 respuesta_limpia = respuesta_limpia[:-3]
-            
+
             respuesta_limpia = respuesta_limpia.strip()
-            
+
             # 4. Parseamos la respuesta directamente como diccionario JSON JSON JSON JSON
             nuevos_resueltos = json.loads(respuesta_limpia)
 
@@ -137,13 +137,13 @@ class SymbolResolver:
                     # Fallback individual robusto estipulado en tu requerimiento (strip + upper)
                     traducido = sym.replace("_EQ", "").split('_')[0].upper()
                     logger.warning(f"Usando fallback semántico interno para {sym} -> {traducido}")
-                
+
                 # Asignamos al diccionario en caliente y a la caché en memoria simultáneamente
                 self.cache[sym] = traducido
                 resultados[sym] = traducido
-                
+
                 logger.info(f"[SYMBOL RESOLVER] {sym} → {traducido}")
-                
+
         # 5. Guardar la caché final persistiendo todos de golpe
         self._save_cache()
 
