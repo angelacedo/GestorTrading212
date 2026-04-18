@@ -23,7 +23,8 @@ class SymbolResolver:
     def __init__(self):
         # 1c. Configuración del modelo gratuito vía OpenRouter
         self.api_key = os.getenv("OPENROUTER_API_KEY")
-        self.model = os.getenv("OPENROUTER_MODEL_MAP_SYMBOL")
+        # Mantiene el fallback local explícito de la instrucción anterior por si en .env falla o cambia
+        self.model = os.getenv("OPENROUTER_MODEL_MAP_SYMBOL", "meta-llama/llama-3.2-3b-instruct:free")
 
         if not self.api_key:
             logger.error("OPENROUTER_API_KEY no encontrada.")
@@ -59,64 +60,92 @@ class SymbolResolver:
             except Exception as e:
                 logger.warning(f"Error escribiendo el caché de símbolos: {e}")
 
-    def resolve_symbol(self, t212_symbol: str) -> str:
+    def resolve_symbols_batch(self, t212_symbols: List[str]) -> Dict[str, str]:
         """
-        1. Resuelve un único símbolo a su estándar de YFinance.
+        Resuelve una lista completa de símbolos en UNA sola llamada al LLM,
+        optimizando drásticamente el uso del caché y evitando rate-limits iterativos.
         """
-        # 3a. Consultando el caché para optimizar tiempo y cuotas
+        resultados = {}
+        símbolos_a_consultar = []
+        
+        # 1. Filtrar de la lista de entrada los que ya estén en caché
         with self.cache_lock:
-            if t212_symbol in self.cache:
-                return self.cache[t212_symbol]
+            for sym in t212_symbols:
+                if not sym or sym in ["Desconocido", "Cash"]:
+                    continue
+                    
+                if sym in self.cache:
+                    resultados[sym] = self.cache[sym]
+                else:
+                    if sym not in símbolos_a_consultar:
+                        símbolos_a_consultar.append(sym)
 
-        # 1c/1d. Diseño de los Prompts exigidos
-        system_prompt = "You are a financial data assistant. Your only task is to convert a Trading 212 ticker symbol to its exact equivalent ticker symbol valid for use with the yfinance Python library. Reply with ONLY the ticker symbol, no explanations, no punctuation, nothing else. If you are not sure, make your best guess based on the symbol structure."
-        user_prompt = f"Convert this Trading 212 symbol to its yfinance equivalent: {t212_symbol}"
+        # 2. Si todos los símbolos ya están en caché, abortar petición LLM
+        if not símbolos_a_consultar:
+            return resultados
+            
+        logger.info(f"Consultando traducción LLM en bloque para {len(símbolos_a_consultar)} símbolos nuevos...")
 
+        # 3. Construir mensaje único de usuario sin system prompt
+        lista_str = "\n".join(símbolos_a_consultar)
+        user_prompt = (
+            "You are a financial data assistant. Convert each Trading 212 ticker symbol "
+            "to its exact yfinance equivalent. Reply ONLY with a JSON object where keys "
+            "are the original symbols and values are the yfinance tickers. No explanations, "
+            "no markdown, no code blocks, just the raw JSON.\n\n"
+            "Symbols to convert:\n"
+            f"{lista_str}"
+        )
+
+        nuevos_resueltos = {}
         try:
-            # 1b. Interrogación al LLM
+            # 8. Petición singular usando el enfoque de LLama 1-prompt-only
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=20,
                 temperature=0.0
             )
 
-            # 1e. Limpieza exhaustiva
+            # Extracción del cuerpo textual
             respuesta_cruda = response.choices[0].message.content or ""
-            resultado = respuesta_cruda.strip().replace('`', '').replace('"', '').replace("'", "")
-
-            if not resultado:
-                raise ValueError("Respuesta LLM vacía")
-
-            # 3c. Almacenamos el descubrimiento de la Inteligencia Artificial
-            with self.cache_lock:
-                self.cache[t212_symbol] = resultado
-            self._save_cache()
-
-            return resultado
+            respuesta_limpia = respuesta_cruda.strip()
+            
+            # Defensiva ligera en caso de que el LLM devuelva formato markdown de bloque
+            if respuesta_limpia.startswith("```json"):
+                respuesta_limpia = respuesta_limpia[7:]
+            if respuesta_limpia.startswith("```"):
+                respuesta_limpia = respuesta_limpia[3:]
+            if respuesta_limpia.endswith("```"):
+                respuesta_limpia = respuesta_limpia[:-3]
+            
+            respuesta_limpia = respuesta_limpia.strip()
+            
+            # 4. Parseamos la respuesta directamente como diccionario JSON JSON JSON JSON
+            nuevos_resueltos = json.loads(respuesta_limpia)
 
         except Exception as e:
-            # 1f. Fallback de rescate heurístico (ej: AAPL_US_EQ -> AAPL)
-            fallback = t212_symbol.replace("_EQ", "").split('_')[0].upper()
-            logger.warning(f"Error resolviendo '{t212_symbol}' por LLM ({e}). Se ha inyectado el Fallback: {fallback}")
-            return fallback
+            logger.warning(f"Error procesando el Batch de JSON del LLM: {str(e)}. Aplicando iteración de fallback...")
 
-    def resolve_symbols_batch(self, t212_symbols: List[str]) -> Dict[str, str]:
-        """
-        2. Función que orquesta la traducción masiva pero secuencial.
-        """
-        resultados = {}
-        for sym in t212_symbols:
-            if not sym or sym in ["Desconocido", "Cash"]:
-                continue
+        # 4(Cont.) Aplicamos validación y Fallbacks
+        with self.cache_lock:
+            for sym in símbolos_a_consultar:
+                if sym in nuevos_resueltos and isinstance(nuevos_resueltos[sym], str) and nuevos_resueltos[sym]:
+                    traducido = nuevos_resueltos[sym]
+                else:
+                    # Fallback individual robusto estipulado en tu requerimiento (strip + upper)
+                    traducido = sym.replace("_EQ", "").split('_')[0].upper()
+                    logger.warning(f"Usando fallback semántico interno para {sym} -> {traducido}")
+                
+                # Asignamos al diccionario en caliente y a la caché en memoria simultáneamente
+                self.cache[sym] = traducido
+                resultados[sym] = traducido
+                
+                logger.info(f"[SYMBOL RESOLVER] {sym} → {traducido}")
+                
+        # 5. Guardar la caché final persistiendo todos de golpe
+        self._save_cache()
 
-            res_yf = self.resolve_symbol(sym)
-
-            # 2d. Logging exhaustivo
-            logger.info(f"[SYMBOL RESOLVER] {sym} → {res_yf}")
-            resultados[sym] = res_yf
-
+        # 6. Devolver el diccionario combinado
         return resultados
