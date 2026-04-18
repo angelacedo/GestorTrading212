@@ -1,0 +1,1 @@
+# GestorTrading212
