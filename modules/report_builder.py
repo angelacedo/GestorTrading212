@@ -24,21 +24,21 @@ class ReportBuilder:
     def build_report(self, analysis_markdown: str) -> dict:
         """
         1. Compone el archivo final y lo parsea.
-           a. Añade la cabecera (Fecha, Hora, y "TRADE REPUBLIC")
+           a. Añade la cabecera (Fecha, Hora, y "TRADING 212")
            b. Inyecta el reporte de la IA
            c. Añade el pie de página con versión.
         3. Retorna un diccionario con la versión puramente Markdown y la versión renderizada a HTML.
         """
         logger.info("Construyendo el formato final del reporte y parseando a HTML...")
-        
+
         ahora = datetime.now()
         fecha_str = ahora.strftime("%Y-%m-%d")
         hora_str = ahora.strftime("%H:%M:%S")
 
         # a. Cabecera fija
-        # Nota: Has indicado TRADE REPUBLIC en tus instrucciones a pesar de que el resto
+        # Nota: Has indicado TRADING 212 en tus instrucciones a pesar de que el resto
         # del código y el .env decían Trading 212. He acatado literalmente tu petición 📝.
-        cabecera = f"# 📋 REPORTE DIARIO DE INVERSIÓN - TRADE REPUBLIC\n"
+        cabecera = f"# 📋 REPORTE DIARIO DE INVERSIÓN - TRADING 212\n"
         cabecera += f"**Fecha:** {fecha_str} | **Hora de Análisis:** {hora_str}\n\n"
         cabecera += "---\n\n"
 
@@ -65,17 +65,17 @@ class ReportBuilder:
         """
         if date is None:
             date = datetime.now()
-            
+
         yyyy_mm = date.strftime("%Y-%m")
         yyyy_mm_dd = date.strftime("%Y-%m-%d")
-        
+
         # Generar ruta del directorio y asegurar que exista
         target_dir = os.path.join(self.base_dir, yyyy_mm)
         os.makedirs(target_dir, exist_ok=True)
-        
+
         # Formato de archivo especificado
         file_path = os.path.join(target_dir, f"reporte-{yyyy_mm_dd}.md")
-        
+
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(md_content)
@@ -89,22 +89,22 @@ class ReportBuilder:
 if __name__ == "__main__":
     try:
         builder = ReportBuilder()
-        
+
         # Fake input del motor de LLM
         mock_analysis = "## 📈 Predicciones a Corto Plazo (7 días)\nTodo apunta a un alza en el sector tecnológico debido a las métricas del Q3.\n\n## ⚠️ Alertas y Riesgos\nLa macroeconomía actual sigue presentando niveles notables de volatilidad."
-        
+
         # Test construir el reporte
         resultados = builder.build_report(mock_analysis)
-        
+
         print("--- RESULTADO MARKDOWN ---")
         print(resultados["markdown"])
-        
+
         print("\n--- RESULTADO HTML (Para correo email) ---")
         print(resultados["html"])
-        
+
         # Test de guardado
         print("\n--- ARCHIVADO ---")
         ruta = builder.save_report(resultados["markdown"], resultados["fecha_objeto"])
-        
+
     except Exception as e:
         logger.error(f"Fallo en prueba de creación de reporte: {str(e)}")

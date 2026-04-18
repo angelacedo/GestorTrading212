@@ -86,6 +86,7 @@ async def main():
 
         indicators_data = {}
         news_data = []
+        analyst_ratings_data = {}
 
         # Primero capturamos el entorno Macro de la economía pura mundial
         try:
@@ -123,12 +124,30 @@ async def main():
             except Exception as e:
                 log_error(f"Noticias dedicadas de {simbolo}", e)
 
+            # Obtener dictamen de firmas analistas (Mejora 1)
+            try:
+                ratings = news_client.get_analyst_ratings(simbolo)
+                if ratings:
+                    analyst_ratings_data[simbolo] = ratings
+            except Exception as e:
+                log_error(f"Ratings de analistas de {simbolo}", e)
+
+            # Identificación heurística de ETFs de Raw Materials para noticias de sector amplio (Mejora 3)
+            # Ej: CS1l_EQ (Crude Oil), PHAG_EQ (Silver), GLD/IGLN/SGLN (Gold)
+            if simbolo.endswith("_EQ") and any(sub in simbolo.upper() for sub in ["GLD", "PHAG", "CS1", "IGLN", "SGLN", "OIL", "CMD"]):
+                try:
+                    sector_news = news_client.get_sector_news("commodities OR precious metals", max_articles=2)
+                    if sector_news:
+                        news_data.extend(sector_news)
+                except Exception as e:
+                    log_error(f"Noticias de sector vital para el ETF {simbolo}", e)
+
         # ---------------------------------------------------------
         # d. Enviar todo al LLM de Claude para el análisis integral
         # ---------------------------------------------------------
         logger.info("[PASO 3] Pensamiento Artificial O1: Lanzando inyección al LLM de OpenRouter...")
         try:
-            raw_analysis = llm_analyzer.analyze(portfolio_data, indicators_data, news_data)
+            raw_analysis = llm_analyzer.analyze(portfolio_data, indicators_data, news_data, analyst_ratings_data)
         except Exception as e:
             raise RuntimeError(f"El LLM falló por completo y el reporte inteligente no pudo fluir: {str(e)}")
 

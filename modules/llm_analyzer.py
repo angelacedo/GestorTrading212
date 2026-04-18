@@ -39,7 +39,7 @@ class LLMAnalyzer:
             api_key=self.api_key,
         )
 
-    def analyze(self, portfolio_data: List[Dict[str, Any]], indicators_data: Dict[str, Any], news_data: List[Dict[str, str]]) -> str:
+    def analyze(self, portfolio_data: List[Dict[str, Any]], indicators_data: Dict[str, Any], news_data: List[Dict[str, str]], analyst_ratings_data: Dict[str, Any] = None) -> str:
         """
         2. Analiza los datos dict/list inyectados usando las directrices (System Prompt) 
         y devuelve una salida Markdown altamente formateada.
@@ -51,6 +51,7 @@ class LLMAnalyzer:
         portfolio_str = json.dumps(portfolio_data, indent=2, ensure_ascii=False)
         indicators_str = json.dumps(indicators_data, indent=2, ensure_ascii=False)
         news_str = json.dumps(news_data, indent=2, ensure_ascii=False)
+        ratings_str = json.dumps(analyst_ratings_data or {}, indent=2, ensure_ascii=False)
 
         # a. Construcción del Prompt de Sistema definiendo el rol (Senior, objetivo, conservador)
         # c. Imposición estricta del formato Markdown solicitado en la salida
@@ -58,6 +59,12 @@ class LLMAnalyzer:
         system_prompt = """Eres un Analista Financiero Senior de alto prestigio internacional. Tu perfil se caracteriza por ser extremadamente objetivo, analítico y conservador respecto al riesgo de volatilidad en los mercados. 
 Tu tarea es ingerir datos numéricos diarios, métricas técnicas que te pasaré, y el contexto macro/micro que te dan las noticias, cruzarlas con el estado real de la cartera del usuario, y redactar un informe de alto nivel.
 Debes mantener siempre un tono profesional, sin preámbulos robóticos ni "Hola, soy tu IA de hoy". Entra directo al análisis y basa tus conclusiones exclusivamente en la data que proceses.
+
+INSTRUCCIONES ANALÍTICAS ADICIONALES Y OBLIGATORIAS:
+- Para cada posición de la cartera, debes mencionar obligatoriamente al menos un rating o precio objetivo de analista externo si está disponible en los datos proporcionados.
+- Al analizar ETFs de materias primas (oro, plata, petróleo u otros), dedica un análisis propio y detallado, no los agrupes con renta variable. Incluye contexto macro de oferta/demanda y tendencia estructural del activo subyacente.
+- Al analizar noticias, distingue entre eventos ocurridos hoy y contexto acumulado de los últimos 30 días. Indica explícitamente si una noticia es reciente (menos de 48h) o de contexto previo.
+- El tono del análisis debe ser siempre objetivo y basado en datos. Evita afirmaciones especulativas sin respaldo en los datos proporcionados.
 
 REQUISITO INQUEBRANTABLE FORMATO MD: Tu respuesta final DEBE utilizar EXACTAMENTE este esqueleto Markdown estructurado y sus respectivas cabeceras, sin omitir ni añadir ninguna otra sección de Título (##). Escribe el contenido dentro de cada bloque.
 
@@ -80,7 +87,10 @@ REQUISITO INQUEBRANTABLE FORMATO MD: Tu respuesta final DEBE utilizar EXACTAMENT
 [MÉTRICAS E INDICADORES TÉCNICOS POR ACTIVO]
 {indicators_str}
 
-[NOTICIAS GLOBALES Y PUNTUALES ÚLTIMAS 24H]
+[RATINGS Y OBJETIVOS DE PRECIO DE ANALISTAS]
+{ratings_str}
+
+[NOTICIAS GLOBALES Y PUNTUALES DE LOS ÚLTIMOS 30 DÍAS]
 {news_str}
 
 Basado única y exclusivamente en esto (junto a tu extenso conocimiento del entorno macroeconómico general consolidado hasta tu fecha de corte), redacta el informe íntegramente respetando las secciones exigidas. Inicia directamente desde la primera cabecera Markdown (## 📊 Resumen del Mercado)."""

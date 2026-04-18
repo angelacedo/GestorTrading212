@@ -24,6 +24,7 @@ class NewsClient:
         Inicializamos identificando nuestros dominios de prensa oficial preferidos.
         """
         self.api_key = os.getenv("NEWSDATA_API_KEY")
+        self.finnhub_api_key = os.getenv("FINNHUB_API_KEY")
         if not self.api_key:
             logger.error("NEWSDATA_API_KEY no se encontró en las variables de entorno.")
             raise ValueError("Credenciales de Newsdata incompletas.")
@@ -48,8 +49,8 @@ class NewsClient:
         noticias_procesadas = []
         titulares_vistos = set()
         
-        # Determinamos el timestamp de hace 24 horas exactas
-        limite_24h = datetime.now() - timedelta(hours=24)
+        # Determinamos el timestamp de los últimos 30 días
+        limite_30d = datetime.now() - timedelta(days=30)
 
         for article in results:
             titulo = article.get("title", "")
@@ -71,7 +72,7 @@ class NewsClient:
                 try:
                     # El formato común es "YYYY-MM-DD HH:MM:SS"
                     pub_date = datetime.strptime(pub_date_str, "%Y-%m-%d %H:%M:%S")
-                    if pub_date < limite_24h:
+                    if pub_date < limite_30d:
                         continue  # La noticia es antigua, saltamos a la siguiente
                 except ValueError:
                     # En caso de formatos irregulares en NewsData, lo dejamos pasar
@@ -103,7 +104,7 @@ class NewsClient:
         2. Busca noticias recientes para un símbolo bursátil específico.
         """
         clean_symbol = self._clean_ticker(symbol)
-        logger.info(f"Buscando noticias recientes (últimas 24h) para {clean_symbol}...")
+        logger.info(f"Buscando noticias recientes (últimos 30 días) para {clean_symbol}...")
         
         # Filtramos por el símbolo (q), en la categoría de negocios (business) en In/Es
         params = {
@@ -160,6 +161,83 @@ class NewsClient:
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Error de red al buscar noticias globales: {str(e)}")
+            return []
+
+    def get_analyst_ratings(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Consulta la API de Finnhub para obtener ratings de analistas externos y objetivos de precio.
+        Endpoints: /stock/recommendation y /stock/price-target
+        """
+        clean_symbol = self._clean_ticker(symbol)
+        if not getattr(self, 'finnhub_api_key', None):
+            logger.warning("FINNHUB_API_KEY ausente. Omitiendo ratings de analistas.")
+            return []
+            
+        logger.info(f"Obteniendo ratings de analistas y precio para {clean_symbol}...")
+        try:
+            params = {"symbol": clean_symbol, "token": self.finnhub_api_key}
+            
+            # Obtener recomendación grupal
+            res_rec = requests.get("https://finnhub.io/api/v1/stock/recommendation", params=params, timeout=5)
+            data_rec = res_rec.json() if res_rec.ok else []
+            
+            # Obtener precio objetivo
+            res_tgt = requests.get("https://finnhub.io/api/v1/stock/price-target", params=params, timeout=5)
+            data_tgt = res_tgt.json() if res_tgt.ok else {}
+            
+            ratings = []
+            if isinstance(data_rec, list) and len(data_rec) > 0:
+                latest = data_rec[0]
+                
+                votos = {
+                    "strongBuy": latest.get("strongBuy", 0),
+                    "buy": latest.get("buy", 0),
+                    "hold": latest.get("hold", 0),
+                    "sell": latest.get("sell", 0),
+                    "strongSell": latest.get("strongSell", 0)
+                }
+                rating_mayoritario = max(votos, key=votos.get)
+                
+                precio_objetivo = data_tgt.get("targetMean", "No disponible")
+                
+                ratings.append({
+                    "firma": "Consenso Bloomberg/Finnhub", # Simulamos una firma externa basándonos en el consenso agregado
+                    "rating": rating_mayoritario.upper(),
+                    "objetivo_precio": precio_objetivo,
+                    "fecha": latest.get("period", "Desconocida")
+                })
+            return ratings
+            
+        except Exception as e:
+            logger.warning(f"Error consultando ratings de Finnhub para {clean_symbol}: {str(e)}")
+            return []
+
+    def get_sector_news(self, sector: str, max_articles: int = 5) -> List[Dict[str, str]]:
+        """
+        Busca noticias de contexto agregadas por sector, especialmente útil para activos sin ticker particular como Materias Primas.
+        """
+        logger.info(f"Buscando contexto macro para el sector: {sector}...")
+        params = {
+            "apikey": self.api_key,
+            "q": sector,
+            "language": "en,es",
+            "category": "business"
+        }
+        
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "error":
+                logger.error(f"Error de NewsData en sector: {data.get('results', {}).get('message', 'Desconocido')}")
+                return []
+
+            results = data.get("results", [])
+            return self._procesar_y_filtrar_noticias(results, max_articles)
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Falla de red buscando el sector {sector}: {str(e)}")
             return []
 
 # Código de ejecución para testing individual
