@@ -29,10 +29,9 @@ class FinnhubClient:
 
     def _clean_ticker(self, ticker: str) -> str:
         """
-        Limpia los tickers de Trading 212 (ej: AAPL_US_EQ -> AAPL)
-        para que funcionen en yfinance/Finnhub.
+        Devuelve el ticker inalterado ya que su mapeo es delegado a main.py
         """
-        return ticker.split('_')[0]
+        return ticker
 
     def get_historical_data(self, symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
         """

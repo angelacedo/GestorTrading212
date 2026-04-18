@@ -25,10 +25,10 @@ try:
     from modules.llm_analyzer import LLMAnalyzer
     from modules.report_builder import ReportBuilder
     from modules.telegram_sender import TelegramSender
+    from modules.symbol_resolver import SymbolResolver
 except ImportError as imp_err:
     logger.critical(f"Error fatal: No se pudieron importar los submódulos locales. ¿Aseguraste ejecutar el script desde el root? ({imp_err})")
     sys.exit(1)
-
 
 async def main():
     """
@@ -59,6 +59,7 @@ async def main():
         news_client = NewsClient()
         llm_analyzer = LLMAnalyzer()
         builder = ReportBuilder()
+        resolver = SymbolResolver()
 
         # ---------------------------------------------------------
         # a. Obtener cartera y resumen de cuenta de Trading 212
@@ -78,6 +79,10 @@ async def main():
 
         if not portfolio:
             logger.warning("No hay posiciones abiertas registradas en el broker actual.")
+
+        logger.info("[PASO 1.5] Truducción cruzada inteligente de Símbolos Trading 212 vía LLM...")
+        lista_simbolos_raw = [p.get("simbolo") for p in portfolio]
+        dicc_traducciones = resolver.resolve_symbols_batch(lista_simbolos_raw)
 
         # ---------------------------------------------------------
         # b. Datos históricos y  c. Noticias específicas + generales
@@ -106,11 +111,16 @@ async def main():
             if not simbolo or simbolo == "Desconocido" or simbolo == "Cash":
                 continue
 
+            # Traducción dinámica de símbolos propietario a global vía caché LLM
+            simbolo_traducido = dicc_traducciones.get(simbolo, simbolo.replace("_EQ", "").split("_")[0].upper())
+            # Base del símbolo para noticias (extrae el ticker raíz sin extensión de mercado)
+            simbolo_base = simbolo_traducido.split(".")[0].split("_")[0]
+
             logger.info(f"            - Procesando telemetría para: {simbolo}")
 
             # Obtener indicadores diarios para análisis métrico (b)
             try:
-                indicadores = market_client.get_market_indicators(simbolo)
+                indicadores = market_client.get_market_indicators(simbolo_traducido)
                 if indicadores:
                     indicators_data[simbolo] = indicadores
             except Exception as e:
@@ -118,7 +128,7 @@ async def main():
 
             # Extraer titulares dedicados de esa compañía particular (c)
             try:
-                simbolo_news = news_client.get_news_for_symbol(simbolo, max_articles=2)
+                simbolo_news = news_client.get_news_for_symbol(simbolo_base, max_articles=2)
                 if simbolo_news:
                     news_data.extend(simbolo_news)
             except Exception as e:
@@ -126,7 +136,7 @@ async def main():
 
             # Obtener dictamen de firmas analistas (Mejora 1)
             try:
-                ratings = news_client.get_analyst_ratings(simbolo)
+                ratings = news_client.get_analyst_ratings(simbolo_traducido)
                 if ratings:
                     analyst_ratings_data[simbolo] = ratings
             except Exception as e:

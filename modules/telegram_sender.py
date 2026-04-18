@@ -65,18 +65,16 @@ class TelegramSender:
 
     def _escape_markdown_v2(self, text: str) -> str:
         """
-        Formatea el Markdown tradicional generado por el LLM para evitar el colapso 
-        de la estricta validación del ParseMode.MARKDOWN_V2 de Telegram.
+        Aplica un escape estricto de los caracteres reservados por Telegram MarkdownV2 
+        según lo estipulado en su documentación oficial.
         """
-        # Telegram no visualiza los (#) como títulos, pero sí la negrita (*).
-        # Los convertimos amablemente para que luzcan formales
+        # Reemplazamos constructores clásicos de MD no soportados directamente por formato válido en TG
         text = re.sub(r'^(#+)\s*(.*?)$', r'*\2*', text, flags=re.MULTILINE)
         
-        # Caracteres que Telegram V2 obliga estrictamente a escapar si no son de formato
-        # La lista completa es larga, pero nos enfocamos en guiones y puntos, típicos del LLM.
-        caracteres_conflictivos = ['-', '.', '!', '(', ')', '+', '=', '{', '}', '>']
-        for c in caracteres_conflictivos:
-            # Reemplazo de seguridad
+        # Escapado estricto: Todo carácter reservado (salvo * y ` que queremos mantener de parte del LLM).
+        # Lista de reservados a purgar con \\: _ [ ] ( ) ~ > # + - = | { } . !
+        caracteres_reservados = ['_', '[', ']', '(', ')', '~', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for c in caracteres_reservados:
             text = text.replace(c, f"\\{c}")
             
         return text
@@ -125,8 +123,8 @@ class TelegramSender:
                 await bot.send_document(
                     chat_id=self.chat_id,
                     document=archivo_memoria,
-                    caption=f"📎 Reporte completo \\- {fecha_str}",
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    caption=f"📎 Reporte completo - {fecha_str}",
+                    parse_mode=None
                 )
                 
                 logger.info("Reporte enviado con éxito a Telegram (Mensajes y Documento).")

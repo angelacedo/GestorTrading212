@@ -30,15 +30,12 @@ class NewsClient:
             raise ValueError("Credenciales de Newsdata incompletas.")
             
         self.base_url = "https://newsdata.io/api/1/news"
-        # Lista de dominios recomendados (fuentes financieras oficiales)
-        self.fuentes_financieras = "reuters,bloomberg,ft,cnbc,marketwatch,wsj,forbes,yahoofinance"
 
     def _clean_ticker(self, ticker: str) -> str:
         """
-        Normaliza símbolos generados por brokers para la búsqueda limpiando los sufijos.
-        Ej: AAPL_US_EQ -> AAPL
+        Devuelve el ticker inalterado; el parseo se maneja a nivel orquestador (main.py).
         """
-        return ticker.split('_')[0]
+        return ticker
 
     def _procesar_y_filtrar_noticias(self, results: List[Dict], max_articles: int) -> List[Dict[str, str]]:
         """
@@ -139,12 +136,12 @@ class NewsClient:
         """
         logger.info("Buscando las noticias globales más relevantes del mercado...")
         
-        # Aquí sí aplicamos el filtro por nuestras fuentes de élite para el contexto del mercado
+        # Utilizamos priorización algorítmica de NewsData en lugar de dominios limitados
         params = {
             "apikey": self.api_key,
             "language": "en,es",
             "category": "business,top",
-            "domain": self.fuentes_financieras
+            "prioritydomain": "top"
         }
         
         try:
