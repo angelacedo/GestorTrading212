@@ -1,0 +1,9 @@
+t212-api
+finnhub-python
+openai
+python-telegram-bot>=21.0
+python-dotenv
+requests
+pandas
+yfinance
+markdown
