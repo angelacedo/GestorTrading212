@@ -91,7 +91,7 @@ if __name__ == "__main__":
         builder = ReportBuilder()
 
         # Fake input del motor de LLM
-        mock_analysis = "## 📈 Predicciones a Corto Plazo (7 días)\nTodo apunta a un alza en el sector tecnológico debido a las métricas del Q3.\n\n## ⚠️ Alertas y Riesgos\nLa macroeconomía actual sigue presentando niveles notables de volatilidad."
+        mock_analysis = "## 📈 Predicciones a Corto Plazo (7 días)\nTodo apunta a un alza en el sector tecnológico debido a las métricas del Q3.\n\n## ⚠️ Alertas y Riesgos\nLa macroeconomía actual sigue presentando niveles notables de volatilidad.\n\n## 🔭 Oportunidades de Mercado Externas\n🟢 **Bitcoin ETF**: Fuerte flujo de entrada de capital institucional."
 
         # Test construir el reporte
         resultados = builder.build_report(mock_analysis)

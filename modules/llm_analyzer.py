@@ -39,7 +39,7 @@ class LLMAnalyzer:
             api_key=self.api_key,
         )
 
-    def analyze(self, portfolio_data: List[Dict[str, Any]], indicators_data: Dict[str, Any], news_data: List[Dict[str, str]], analyst_ratings_data: Dict[str, Any] = None) -> str:
+    def analyze(self, portfolio_data: List[Dict[str, Any]], indicators_data: Dict[str, Any], news_data: List[Dict[str, str]], analyst_ratings_data: Dict[str, Any] = None, watchlist_data: List[str] = None) -> str:
         """
         2. Analiza los datos dict/list inyectados usando las directrices (System Prompt) 
         y devuelve una salida Markdown altamente formateada.
@@ -52,6 +52,11 @@ class LLMAnalyzer:
         indicators_str = json.dumps(indicators_data, indent=2, ensure_ascii=False)
         news_str = json.dumps(news_data, indent=2, ensure_ascii=False)
         ratings_str = json.dumps(analyst_ratings_data or {}, indent=2, ensure_ascii=False)
+        
+        if watchlist_data is None:
+            watchlist_str = "No definida. Infiere oportunidades relevantes basándote en el contexto macro de las noticias y en los sectores ya presentes en la cartera del usuario."
+        else:
+            watchlist_str = json.dumps(watchlist_data, indent=2, ensure_ascii=False)
 
         # a. Construcción del Prompt de Sistema definiendo el rol (Senior, objetivo, conservador)
         # c. Imposición estricta del formato Markdown solicitado en la salida
@@ -74,9 +79,18 @@ REQUISITO INQUEBRANTABLE FORMATO MD: Tu respuesta final DEBE utilizar EXACTAMENT
 ## 📈 Predicciones a Corto Plazo (7 días)
 ## ⚠️ Alertas y Riesgos
 ## ✅ Recomendaciones del Día
+## 🔭 Oportunidades de Mercado Externas
+
+En ## 🔭 Oportunidades de Mercado Externas: Analiza activos, ETFs o sectores que NO están en la cartera actual pero que, basándote en las noticias del día y el contexto macro, representan una oportunidad o riesgo relevante en los próximos 7 días. Para cada uno indica: nombre del activo, ticker si lo conoces, señal (🟢 COMPRAR / 🟡 OBSERVAR / 🔴 EVITAR) y una justificación concisa basada en los datos proporcionados. Mínimo 3 oportunidades, máximo 6.
 
 ***
-*Disclaimer Legal: Este reporte ha sido generado automatizadamente por Inteligencia Artificial y posee un propósito exclusivamente informativo. De ninguna manera constituye un asesoramiento financiero fiduciario regulado, ni una recomendación oficial o determinante de inversión.*"""
+*Disclaimer Legal: Este reporte ha sido generado automatizadamente por Inteligencia Artificial y posee un propósito exclusivamente informativo. De ninguna manera constituye un asesoramiento financiero fiduciario regulado, ni una recomendación oficial o determinante de inversión.*
+
+INSTRUCCIÓN CRÍTICA DE OUTPUT: No incluyas ningún proceso de razonamiento, 
+planificación, borradores, ni metacomentarios sobre cómo vas a estructurar 
+la respuesta. Empieza a escribir directamente el contenido de la primera 
+sección ## 📊 Resumen del Mercado sin ningún preámbulo. El output debe ser 
+EXCLUSIVAMENTE el reporte final en Markdown, nada más."""
 
         # b. Inyección de todos los datos recibidos (Estructurados JSON vs string plano) en el User Prompt
         user_prompt = f"""Aquí tienes tu compilación del dataset diario para evaluación:
@@ -93,6 +107,9 @@ REQUISITO INQUEBRANTABLE FORMATO MD: Tu respuesta final DEBE utilizar EXACTAMENT
 [NOTICIAS GLOBALES Y PUNTUALES DE LOS ÚLTIMOS 30 DÍAS]
 {news_str}
 
+[WATCHLIST EXTERNA - ACTIVOS FUERA DE CARTERA A EVALUAR]
+{watchlist_str}
+
 Basado única y exclusivamente en esto (junto a tu extenso conocimiento del entorno macroeconómico general consolidado hasta tu fecha de corte), redacta el informe íntegramente respetando las secciones exigidas. Inicia directamente desde la primera cabecera Markdown (## 📊 Resumen del Mercado)."""
 
         try:
@@ -103,8 +120,9 @@ Basado única y exclusivamente en esto (junto a tu extenso conocimiento del ento
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=2800, # Límite alto para dejar que fluya el reporte sin cortar
-                temperature=0.3  # Baja "creatividad". Favorece lógica analítica, predictibilidad y estilo conservador.
+                max_tokens=6000, # Límite alto para dejar que fluya el reporte sin cortar
+                temperature=0.3,  # Baja "creatividad". Favorece lógica analítica, predictibilidad y estilo conservador.
+                extra_body={"reasoning": {"effort": "none"}}
             )
             
             report = response.choices[0].message.content

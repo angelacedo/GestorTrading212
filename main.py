@@ -35,6 +35,8 @@ async def main():
     3. Función principal orquestadora. Toma el control lineal del proceso de inicio a fin.
     Se declara asíncrona porque la interacción principal con Telegram requiere I/O asíncrona.
     """
+    WATCHLIST = ["Copper ETF", "Uranium ETF", "US Defense ETF", "India ETF", "Bitcoin ETF"]
+
     logger.info("=" * 60)
     logger.info("🚀 INICIANDO EJECUCIÓN DEL ORQUESTADOR FINANCIERO")
     logger.info("=" * 60)
@@ -157,7 +159,7 @@ async def main():
         # ---------------------------------------------------------
         logger.info("[PASO 3] Pensamiento Artificial O1: Lanzando inyección al LLM de OpenRouter...")
         try:
-            raw_analysis = llm_analyzer.analyze(portfolio_data, indicators_data, news_data, analyst_ratings_data)
+            raw_analysis = llm_analyzer.analyze(portfolio_data, indicators_data, news_data, analyst_ratings_data, watchlist_data=WATCHLIST)
         except Exception as e:
             raise RuntimeError(f"El LLM falló por completo y el reporte inteligente no pudo fluir: {str(e)}")
 
