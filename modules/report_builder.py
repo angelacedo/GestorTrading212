@@ -36,14 +36,22 @@ class ReportBuilder:
         hora_str = ahora.strftime("%H:%M:%S")
 
         # a. Cabecera fija
-        # Nota: Has indicado TRADING 212 en tus instrucciones a pesar de que el resto
-        # del código y el .env decían Trading 212. He acatado literalmente tu petición 📝.
-        cabecera = f"# 📋 REPORTE DIARIO DE INVERSIÓN - TRADING 212\n"
-        cabecera += f"**Fecha:** {fecha_str} | **Hora de Análisis:** {hora_str}\n\n"
+        dia_semana = ahora.strftime("%A")
+        dias_es = {
+            "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+            "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
+        }
+        dia_es = dias_es.get(dia_semana, dia_semana)
+        cabecera = f"# 📋 REPORTE DIARIO DE INVERSIÓN — TRADING 212\n"
+        cabecera += f"> 📅 **{dia_es}, {fecha_str}** &nbsp;|&nbsp; 🕐 Generado a las **{hora_str}**\n\n"
         cabecera += "---\n\n"
 
         # c. Pie de página fijo con metadatos del bot
-        pie_pagina = f"\n\n---\n*Generado automáticamente de forma local por Bot Analista ({BOT_VERSION}) - Proceso finalizado a las {hora_str}*"
+        pie_pagina = (
+            f"\n\n---\n"
+            f"> *⚙️ Bot Analista {BOT_VERSION} · Proceso finalizado a las {hora_str} · "
+            f"Solo uso informativo, no constituye asesoramiento financiero.*"
+        )
 
         # b. Ensamblaje: Cabecera + Cuerpo IA + Pie
         md_content = cabecera + analysis_markdown + pie_pagina
