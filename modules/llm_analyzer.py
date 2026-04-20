@@ -157,7 +157,7 @@ Basado única y exclusivamente en esto (junto a tu extenso conocimiento del ento
                 ],
                 max_tokens=6000, # Límite alto para dejar que fluya el reporte sin cortar
                 temperature=0.3,  # Baja "creatividad". Favorece lógica analítica, predictibilidad y estilo conservador.
-                extra_body={"reasoning": {"effort": "none"}}
+                extra_body={"reasoning": {"effort": "medium"}}
             )
             
             report = response.choices[0].message.content
